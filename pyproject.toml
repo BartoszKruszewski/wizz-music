@@ -1,0 +1,9 @@
+[project]
+name = "wizz-music"
+version = "0.1.0"
+dependencies = [
+    "cffi==2.0.0",
+    "numpy==2.4.1",
+    "pycparser==2.23",
+    "SoundCard==0.4.5"
+]
