@@ -20,48 +20,36 @@ AUDIO_DEVICE_NAME = "BlackHole"
 WIZ_PORT = 38899
 
 # Audio Settings
-# SAMPLE_RATE: Standard CD Quality (44100 Hz).
-# CHUNK_SIZE: Lower = Faster latency (11ms), Higher = More stability.
-# 512 is the sweet spot for real-time light sync.
 SAMPLE_RATE = 44100
 CHUNK_SIZE = 512 
 FREQ_BIN = SAMPLE_RATE / CHUNK_SIZE
 
 # WiZ Network Settings
-# WIZ_UPDATE_INTERVAL: Minimum time (seconds) between UDP packets sent to bulbs.
-# 0.04s = 25 packets/sec. Decreasing this further might freeze the bulbs.
 WIZ_UPDATE_INTERVAL = 0.04
 
 # Frequency Bands (Hz)
-# Define what frequency range corresponds to Bass, Mids, and Highs.
 BASS_RANGE = (20, 250)
 MID_RANGE  = (250, 4000)
 HIGH_RANGE = (4000, 20000)
 
-# Visualization Dynamics (Smoothing)
-# ATTACK_FACTOR (0.0-1.0): How fast the bar jumps up. 0.95 = very snappy.
+# Visualization Dynamics
 ATTACK_FACTOR = 0.95  
-# RELEASE_FACTOR (0.0-1.0): How fast the bar falls down. 0.15 = quick decay.
 RELEASE_FACTOR = 0.15 
-# CONTRAST: Gamma correction power. Higher value (>2.0) crushes silence/noise 
-# and amplifies peaks, making the beat more visible.
 CONTRAST = 3.0 
-# Console visual width (number of characters)
 BAR_WIDTH_MINI = 20
 
+# Noise Gate (NEW)
+# Signals below this raw energy level are treated as absolute silence.
+# Prevents auto-gain from amplifying background hiss during quiet parts.
+MIN_VOLUME_THRESHOLD = 0.002
+
 # Light Control Logic
-# LIGHT_CUTOFF_THRESHOLD (0-100): If bass is below this %, lights turn OFF (black).
-# Creates a "blackout" effect between beats.
 LIGHT_CUTOFF_THRESHOLD = 20  
-# LIGHT_MAX_THRESHOLD (0-100): If bass is above this %, lights go to 100% brightness.
 LIGHT_MAX_THRESHOLD = 90     
-# BEAT_TRIGGER_THRESHOLD (0-100): Bass level required to trigger a random color change.
 BEAT_TRIGGER_THRESHOLD = 80  
-# BEAT_COOLDOWN (seconds): Minimum time to wait before changing color again.
-# Prevents seizure-inducing flickering on fast songs.
 BEAT_COOLDOWN = 0.4          
 
-# ANSI Colors for Console Output
+# ANSI Colors
 C_RED = '\033[91m'
 C_GREEN = '\033[92m'
 C_BLUE = '\033[94m'
@@ -211,8 +199,18 @@ class BandProcessor:
         band_data = magnitude_spectrum[start:end]
         energy = np.mean(band_data) if len(band_data) > 0 else 0.0
 
-        self.max_history.append(energy)
-        local_max = np.percentile(self.max_history, 95) if len(self.max_history) > 10 else 1.0
+        # --- NOISE GATE ---
+        if energy < MIN_VOLUME_THRESHOLD:
+            energy = 0.0
+        else:
+            self.max_history.append(energy)
+
+        # Auto-Gain
+        if len(self.max_history) > 10:
+            local_max = np.percentile(self.max_history, 95)
+        else:
+            local_max = 0.1 # Start slightly higher to avoid initial flash
+            
         if local_max < 0.001: local_max = 0.001 
 
         norm = min(max(energy / local_max, 0.0), 1.0)
